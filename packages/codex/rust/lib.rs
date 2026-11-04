@@ -1628,11 +1628,21 @@ impl NativeThread {
         manual_checkpoint::prepare(&inner, &self.manual).map_err(py_error)
     }
 
-    fn _continue_manual<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (trace_json=None))]
+    fn _continue_manual<'py>(
+        &self,
+        py: Python<'py>,
+        trace_json: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let trace = trace_json
+            .as_deref()
+            .map(serde_json::from_str::<codex_protocol::protocol::W3cTraceContext>)
+            .transpose()
+            .map_err(|_| PyValueError::new_err("Invalid trace carrier"))?;
         let inner = self.current()?;
         let manual = self.manual.clone();
         async_bridge::future_into_py(py, async move {
-            let receipt = manual_checkpoint::continue_if_ready(&inner, &manual)
+            let receipt = manual_checkpoint::continue_if_ready(&inner, &manual, trace)
                 .await
                 .map_err(py_error)?;
             serde_json::to_string(&receipt).map_err(py_error)

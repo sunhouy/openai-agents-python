@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from contextvars import ContextVar
 from copy import copy
@@ -15,6 +15,8 @@ from types import MappingProxyType, TracebackType
 from typing import TYPE_CHECKING, Any, Generic, SupportsIndex, cast, overload
 
 from typing_extensions import TypedDict, TypeVar
+
+from ._trace_context import TraceContext, _trace_context
 
 if TYPE_CHECKING:
     from ._function_tools import Tool
@@ -483,6 +485,7 @@ class Agent(Generic[ContextT, OutputT]):
         model_settings: ModelSettings | None = None,
         environment: EnvironmentSource[None] | None = None,
         tools: Sequence[Tool[None]] | None = None,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> AbstractAsyncContextManager[Session[None, OutputT]]: ...
 
     @overload
@@ -498,6 +501,7 @@ class Agent(Generic[ContextT, OutputT]):
         model_settings: ModelSettings | None = None,
         environment: EnvironmentSource[object] | None = None,
         tools: Sequence[Tool[object]] | None = None,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> AbstractAsyncContextManager[Session[object, OutputT]]: ...
 
     @overload
@@ -513,6 +517,7 @@ class Agent(Generic[ContextT, OutputT]):
         model_settings: ModelSettings | None = None,
         environment: EnvironmentSource[ContextT] | None = None,
         tools: Sequence[Tool[ContextT]] | None = None,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> AbstractAsyncContextManager[Session[ContextT, OutputT]]: ...
 
     @asynccontextmanager
@@ -528,8 +533,13 @@ class Agent(Generic[ContextT, OutputT]):
         model_settings: ModelSettings | None = None,
         environment: EnvironmentSource[SessionContextT] | None = None,
         tools: Sequence[Tool[SessionContextT]] | None = None,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> AsyncIterator[Session[SessionContextT, OutputT]]:
         """Open one conversation and close all runtime work on context exit.
+
+        parent_trace parents startup and defaults every new root or restored manual
+        continuation. None supplies no explicit parent. Pass a fresh worker
+        carrier on restore; trace context is never restored from saved state.
 
         An explicit provider here overrides this Agent's provider. Both are
         borrowed; the application closes them. When neither is supplied, this
@@ -588,6 +598,7 @@ class Agent(Generic[ContextT, OutputT]):
             model=model,
             model_settings=model_settings,
             tool_selection=tools,
+            parent_trace=parent_trace,
         )
         try:
             yield session
@@ -621,6 +632,7 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[None] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]: ...
 
     @overload
@@ -638,6 +650,7 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[object] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]: ...
 
     @overload
@@ -656,6 +669,7 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[ContextT] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]: ...
 
     async def run(
@@ -675,8 +689,12 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[SessionContextT] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]:
         """Run one submission through a Session and close it on completion.
+
+        parent_trace follows session() and parents this run, including a restored
+        manual continuation. It does not capture an ambient Python trace.
 
         provider, model, and model_settings follow the same precedence and
         restore restrictions as session(). An implicit provider is retired when
@@ -775,6 +793,8 @@ class Agent(Generic[ContextT, OutputT]):
             options["model_settings"] = model_settings
         if environment is not None:
             options["environment"] = environment
+        if parent_trace is not None:
+            options["parent_trace"] = _trace_context(parent_trace)
         async with session_factory(
             context=cast(SessionContextT, context),
             **options,
@@ -842,6 +862,7 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[None] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]: ...
 
     @overload
@@ -859,6 +880,7 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[object] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]: ...
 
     @overload
@@ -877,6 +899,7 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[ContextT] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]: ...
 
     def run_sync(
@@ -896,6 +919,7 @@ class Agent(Generic[ContextT, OutputT]):
         before_step: _BeforeStep[SessionContextT] | None = None,
         state: SessionState | None = None,
         return_state: bool = False,
+        parent_trace: TraceContext | Mapping[str, str | None] | None = None,
     ) -> Completed[OutputT]:
         """Run through session() outside an event loop.
 
@@ -926,6 +950,8 @@ class Agent(Generic[ContextT, OutputT]):
                 options["model_settings"] = model_settings
             if environment is not None:
                 options["environment"] = environment
+            if parent_trace is not None:
+                options["parent_trace"] = _trace_context(parent_trace)
             return _SyncRun().run(
                 self.run(
                     input,

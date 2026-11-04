@@ -10,6 +10,7 @@ if TYPE_CHECKING:
         ToolContext as ToolContext,
         function_tool as function_tool,
     )
+    from ._trace_context import TraceContext as TraceContext
     from .agent import (
         Agent as Agent,
         ModelSettings as ModelSettings,
@@ -98,6 +99,7 @@ if TYPE_CHECKING:
     from .turn import PendingRequests as PendingRequests, Turn as Turn
 
 _MODULES = {
+    "TraceContext": "._trace_context",
     "Allow": ".native_interception",
     "Deny": ".native_interception",
     "ReplaceArguments": ".native_interception",
