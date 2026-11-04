@@ -367,6 +367,27 @@ class TestOpenAIResponsesCompactionSession:
         ):
             assert session.client is mock_client
 
+    def test_client_uses_sdk_default_key(self) -> None:
+        session = OpenAIResponsesCompactionSession(
+            session_id="test",
+            underlying_session=self.create_mock_session(),
+        )
+
+        with (
+            patch(
+                "agents.memory.openai_responses_compaction_session.get_default_openai_client",
+                return_value=None,
+            ),
+            patch(
+                "agents.memory.openai_responses_compaction_session.get_default_openai_key",
+                return_value="sk-sdk-key",
+            ),
+            patch("agents.memory.openai_responses_compaction_session.AsyncOpenAI") as make_client,
+        ):
+            assert session.client is make_client.return_value
+
+        assert make_client.call_args.kwargs == {"api_key": "sk-sdk-key"}
+
     def create_mock_session(self) -> MagicMock:
         mock = MagicMock(spec=Session)
         mock.session_id = "test-session"

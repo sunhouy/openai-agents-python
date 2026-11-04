@@ -10,7 +10,7 @@ from openai import AsyncOpenAI
 from .._tool_identity import get_hosted_mcp_approval_request_identity
 from ..items import TResponseInputItem
 from ..logger import log_model_and_tool_action_warning
-from ..models._openai_shared import get_default_openai_client
+from ..models._openai_shared import get_default_openai_client, get_default_openai_key
 from ..run_internal.items import (
     ReasoningItemIdPolicy,
     apply_reasoning_item_id_policy,
@@ -128,7 +128,8 @@ class OpenAIResponsesCompactionSession(SessionABC, OpenAIResponsesCompactionAwar
             underlying_session: Session store that holds the compacted history. Cannot be
                 OpenAIConversationsSession.
             client: OpenAI client for responses.compact API calls. Defaults to
-                get_default_openai_client() or new AsyncOpenAI().
+                get_default_openai_client() or a new AsyncOpenAI() built with
+                get_default_openai_key().
             model: Model to use for responses.compact. Defaults to "gpt-4.1". Must be an
                 OpenAI model name (gpt-*, o*, or ft:gpt-*).
             compaction_mode: Controls how the compaction request provides conversation
@@ -193,7 +194,11 @@ class OpenAIResponsesCompactionSession(SessionABC, OpenAIResponsesCompactionAwar
     def client(self) -> AsyncOpenAI:
         if self._client is None:
             default_client = get_default_openai_client()
-            self._client = default_client if default_client is not None else AsyncOpenAI()
+            self._client = (
+                default_client
+                if default_client is not None
+                else AsyncOpenAI(api_key=get_default_openai_key())
+            )
         return self._client
 
     def _resolve_compaction_mode_for_response(

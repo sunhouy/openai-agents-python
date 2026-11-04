@@ -189,6 +189,45 @@ class TestOpenAIConversationsSessionConstructor:
                 mock_get_default.assert_called_once()
                 mock_async_openai.assert_called_once()
 
+    def test_init_with_no_args_uses_sdk_default_key(self):
+        """Without a default client the SDK key must be used, not OPENAI_API_KEY."""
+        with (
+            patch(
+                "agents.memory.openai_conversations_session.get_default_openai_client",
+                return_value=None,
+            ),
+            patch(
+                "agents.memory.openai_conversations_session.get_default_openai_key",
+                return_value="sk-sdk-key",
+            ),
+            patch("agents.memory.openai_conversations_session.AsyncOpenAI") as mock_async_openai,
+        ):
+            session = OpenAIConversationsSession()
+
+        assert session._openai_client is mock_async_openai.return_value
+        assert mock_async_openai.call_args.kwargs == {"api_key": "sk-sdk-key"}
+
+    @pytest.mark.asyncio
+    async def test_start_uses_sdk_default_key(self):
+        with (
+            patch(
+                "agents.memory.openai_conversations_session.get_default_openai_client",
+                return_value=None,
+            ),
+            patch(
+                "agents.memory.openai_conversations_session.get_default_openai_key",
+                return_value="sk-sdk-key",
+            ),
+            patch("agents.memory.openai_conversations_session.AsyncOpenAI") as mock_async_openai,
+        ):
+            mock_async_openai.return_value.conversations.create = AsyncMock(
+                return_value=MagicMock(id="sdk_key_id")
+            )
+            conversation_id = await start_openai_conversations_session(None)
+
+        assert conversation_id == "sdk_key_id"
+        assert mock_async_openai.call_args.kwargs == {"api_key": "sk-sdk-key"}
+
 
 class TestOpenAIConversationsSessionLifecycle:
     """Test session ID lifecycle management."""
