@@ -5,7 +5,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from agents.models._openai_shared import get_default_openai_client
+from agents.models._openai_shared import get_default_openai_client, get_default_openai_key
 
 from ..items import TResponseInputItem
 from .session import SessionABC, _await_mutation
@@ -18,7 +18,11 @@ async def start_openai_conversations_session(openai_client: AsyncOpenAI | None =
     _maybe_openai_client = openai_client
     if openai_client is None:
         default_client = get_default_openai_client()
-        _maybe_openai_client = default_client if default_client is not None else AsyncOpenAI()
+        _maybe_openai_client = (
+            default_client
+            if default_client is not None
+            else AsyncOpenAI(api_key=get_default_openai_key())
+        )
     # this never be None here
     _openai_client: AsyncOpenAI = _maybe_openai_client  # type: ignore [assignment]
 
@@ -47,7 +51,11 @@ class OpenAIConversationsSession(SessionABC):
         _openai_client = openai_client
         if _openai_client is None:
             default_client = get_default_openai_client()
-            _openai_client = default_client if default_client is not None else AsyncOpenAI()
+            _openai_client = (
+                default_client
+                if default_client is not None
+                else AsyncOpenAI(api_key=get_default_openai_key())
+            )
         # this never be None here
         self._openai_client: AsyncOpenAI = _openai_client
 
