@@ -3270,6 +3270,43 @@ class TestRunState:
         with pytest.raises(UserError, match="tool_invocations must be a mapping"):
             await RunState.from_json(agent, json_data)
 
+    @pytest.mark.parametrize(
+        ("mutate", "expected"),
+        [
+            pytest.param(
+                lambda data: data["context"].__setitem__("function_tool_approvals", {}),
+                "function_tool_approvals must be a list",
+                id="not-a-list",
+            ),
+            pytest.param(
+                lambda data: data["context"].__setitem__(
+                    "function_tool_approvals", [{"tool_key": 1}]
+                ),
+                "Invalid agent-owned function approval record",
+                id="bad-record",
+            ),
+            pytest.param(
+                lambda data: data["context"].__setitem__(
+                    "function_tool_approvals",
+                    [{"agent": "ghost", "tool_key": "run", "decision": {"approved": ["cid1"]}}],
+                ),
+                "Function approval owner is absent",
+                id="owner-missing",
+            ),
+        ],
+    )
+    async def test_function_approval_validation_errors_are_not_redacted(
+        self, mutate: Callable[[dict[str, Any]], None], expected: str
+    ):
+        """A broken approval checkpoint should say so instead of 'Error details are redacted.'"""
+        agent = Agent(name="ApprovalCurrentAgent")
+        json_data = make_state(agent, context=RunContextWrapper(context=None)).to_json()
+        mutate(json_data)
+
+        with pytest.raises(UserError, match=expected) as exc_info:
+            await RunState.from_json(agent, json_data)
+        assert "redacted" not in str(exc_info.value)
+
     async def test_output_item_id_does_not_complete_unrelated_invocation(self):
         """Only an output call_id can commit a tool invocation."""
         context: RunContextWrapper[Any] = RunContextWrapper(context=None)

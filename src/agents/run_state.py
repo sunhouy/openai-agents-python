@@ -5640,6 +5640,11 @@ _TRUSTED_RUN_STATE_ERROR_MESSAGES = frozenset(
             "and tool name."
         ),
         "RunState completed tool invocation does not match a restored tool call and output.",
+        # Agent-owned function approvals. These carry no snapshot data, so the caller
+        # should see why the checkpoint was rejected rather than the redaction notice.
+        "RunState function_tool_approvals must be a list.",
+        "Invalid agent-owned function approval record.",
+        "Function approval owner is absent from the restored graph.",
         "RunState sandbox resume state contains an invalid manifest",
         "RunState sandbox resume state has an invalid envelope",
         *(
